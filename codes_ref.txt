@@ -5,6 +5,6 @@ docker run -p 8000:8000 firstapp-api ## run the docker and expose to 8000 port a
 
 curl http://localhost:8000/health ## Check the health
 
-curl -X POST http://localhost:8000/output -H "Content-Type:application/json" -d '{"input":"ggghhhgghh"}' ##run the function output function in the app.py
+curl -X POST http://localhost:8000/output -H "Content-Type:application/json" -d '{"input":"ggghhhgghh"}' ##run the  output function in the app.py
 
-http://localhost:8000/output ## we can run this to get the interactive UI
+http://localhost:8000/docs ## we can run this to get the interactive UI
