@@ -1,0 +1,10 @@
+docker build -t firstapp-api .  ##here firstapp-api is the name given
+docker build --progress=plain -t firstapp-api . --no-cache ## optional: to get the full build outputs without cache
+
+docker run -p 8000:8000 firstapp-api ## run the docker and expose to 8000 port as we described in the Dockerfile
+
+curl http://localhost:8000/health ## Check the health
+
+curl -X POST http://localhost:8000/output -H "Content-Type:application/json" -d '{"input":"ggghhhgghh"}' ##run the function output function in the app.py
+
+http://localhost:8000/output ## we can run this to get the interactive UI

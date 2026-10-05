@@ -13,7 +13,9 @@ def health():
 
 @app.post("/output")
 def output(input_data:UserInput):
+     
     print("The user input is: ",input_data.input)
+    return(input_data.input)
 
 
 @app.get("./")
