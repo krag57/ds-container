@@ -1,7 +1,16 @@
+## Docker setup
+
+#aws account id is in the .env
+
 docker build -t firstapp-api .  ##here firstapp-api is the name given
 docker build --progress=plain -t firstapp-api . --no-cache ## optional: to get the full build outputs without cache
 
 docker run -p 8000:8000 firstapp-api ## run the docker and expose to 8000 port as we described in the Dockerfile
+
+# (not part of the steps, but worth to keep it) view and stop the runnign containers
+docker ps
+docker stop <container id>
+#
 
 curl http://localhost:8000/health ## Check the health
 
@@ -9,16 +18,66 @@ curl -X POST http://localhost:8000/output -H "Content-Type:application/json" -d 
 
 http://localhost:8000/docs ## we can run this to get the interactive UI
 
-
+## ECR setup and push Docker image
 aws ecr create-repository --repository-name firstapp-api --region us-east-1 ## ECR registration
 
-aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 117088935427.dkr.ecr.us-east-1.amazonaws.com  ##authenticate Docker to ECR
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin <aws_account_id>.dkr.ecr.us-east-1.amazonaws.com  ##authenticate Docker to ECR
 
-docker tag firstapp-api:latest 117088935427.dkr.ecr.us-east-1.amazonaws.com/firstapp-api ## Taging the local image for ECR
+docker tag firstapp-api:latest <aws_account_id>.dkr.ecr.us-east-1.amazonaws.com/firstapp-api ## Taging the local image for ECR
 
 
 docker images ## confirm images
 
-docker push 117088935427.dkr.ecr.us-east-1.amazonaws.com/firstapp-api:latest ## push the image to the ecr
+docker push <aws_account_id>.dkr.ecr.us-east-1.amazonaws.com/firstapp-api:latest ## push the image to the ecr
 
 aws ecr describe-images --repository-name firstapp-api --region us-east-1 ## confirm it landed in ECR
+
+
+## EC2 setup
+
+#create Ec2 with key pair and securtiy group rules with 
+#    1) Type: SSH Source: "My IP" <- for remotely login into the ec2
+#    2) Type: Custom TCP, port: 8000, source: "My IP" <- allow fastapi connection (8000 you defined in docker) allowing only internet from currnt IP not anywhere (not now)
+
+# also create a Iam role and attach to EC2 with policy AmazonEC2ContainerRegistryReadOnly; this will allow EC2 to pull(read) images from ECR
+
+#create SSH
+mkdir -p ~./ssh
+mv ~/Downloads/firstapp-api-ec2-key.pem ~/.ssh/
+chmod 400 ~/.ssh/firstapp-api-ec2-key.pem 
+
+ssh -i ~/.ssh/firstapp-api-ec2-key.pem ec2-user@<public ip address>
+
+#install docker on the instance
+sudo yum update -y
+sudo yum install docker -y
+sudo service docker start
+sudo usermod -a -G docker ec2-user
+
+#authenticate and pull the image from ECR to SSH session
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin <aws_account_id>.dkr.ecr.us-east-1.amazonaws.com
+docker pull <aws_account_id>.dkr.ecr.us-east-1.amazonaws.com/firstapp-api:latest
+
+#
+docker run -d -p 8000:8000 <aws_account_id>.dkr.ecr.us-east-1.amazonaws.com/firstapp-api:latest
+
+## we encounter an issue with the architecture difference
+# so, docker is build in mac, arm64 architecture but the EC2 is linux/amd64 architecture
+#we rebuild the docker for linux/amd64 or
+# switch EC2 to arm64 
+
+# we are going to rebuild the for amd64
+exit #first exit EC2
+
+docker buildx build --platform linux/amd64 -t firstapp-api:amd64 .
+docker tag firstapp-api:amd64 <aws_account_id>.dkr.ecr.us-east-1.amazonaws.com/firstapp-api:latest
+docker push <aws_account_id>.dkr.ecr.us-east-1.amazonaws.com/firstapp-api:latest
+
+ssh -i ~/.ssh/firstapp-api-ec2-key.pem ec2-user@<public ip>
+docker pull <aws_account_id>.dkr.ecr.us-east-1.amazonaws.com/firstapp-api
+docker run -d -p 8000:8000 <aws_account_id>.dkr.ecr.us-east-1.amazonaws.com/firstapp-api:latest
+
+#then in new terminal (locally)
+curl http://<pub ip>:8000/health
+#or in browser for the UI
+http://<pub ip>:8000/docs
