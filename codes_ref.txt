@@ -8,3 +8,17 @@ curl http://localhost:8000/health ## Check the health
 curl -X POST http://localhost:8000/output -H "Content-Type:application/json" -d '{"input":"ggghhhgghh"}' ##run the  output function in the app.py
 
 http://localhost:8000/docs ## we can run this to get the interactive UI
+
+
+aws ecr create-repository --repository-name firstapp-api --region us-east-1 ## ECR registration
+
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 117088935427.dkr.ecr.us-east-1.amazonaws.com  ##authenticate Docker to ECR
+
+docker tag firstapp-api:latest 117088935427.dkr.ecr.us-east-1.amazonaws.com/firstapp-api ## Taging the local image for ECR
+
+
+docker images ## confirm images
+
+docker push 117088935427.dkr.ecr.us-east-1.amazonaws.com/firstapp-api:latest ## push the image to the ecr
+
+aws ecr describe-images --repository-name firstapp-api --region us-east-1 ## confirm it landed in ECR
