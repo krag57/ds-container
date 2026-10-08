@@ -94,7 +94,7 @@ aws iam get-role --role-name ecsTaskExecutionRole
 #create a log group for container output. Since Fargate has no servers it is the way to get the apps output, error messages.....
 aws logs create-log-group --log-group-name /ecs/firstapp-api --region us-east-1
 
-#create a task definition. like here as json file
+#create a task definition. like here as json file; there replace to the correct aws account
 
 #register the task definition
 aws ecs register-task-definition --cli-input-json file://task-definition.json
@@ -106,4 +106,32 @@ aws ecs register-task-definition --cli-input-json file://task-definition.json
 
 #Test it
 curl http://<task-public-ip>:8000/health
+
+
+##Now EKS
+brew install ecsctl
+brew install kubectl
+
+#confirm the installation
+eksctl version
+kubectl version
+
+#create eks cluster
+eksctl create cluster --name firstapp-eks-cluster --region us-east-1 --nodegroup-name standard-workers --node-type t3.small --nodes 2 -
+-nodes-min 1 --nodes-max 3
+
+#get status
+kubectl get nodes
+
+#create the deployment and service file; here it is in one file, then apply it
+kubectl apply -f deployment.yaml
+
+#watch the pods, created
+kubectl get pods
+
+# get the loadbalancer address
+kubectl get service firstapp-api-service
+
+#Test it
+curl http://<EXTERNAL-IP>:8000/health
 

@@ -7,7 +7,7 @@
     "containerDefinitions":[
         {
             "name":"firstapp-api",
-            "image":"117088935427.dkr.ecr.us-east-1.amazonaws.com/firstapp-api:latest",
+            "image":"<aws_account_id>.dkr.ecr.us-east-1.amazonaws.com/firstapp-api:latest",
             "portMappings": [{"containerPort":8000,"protocol":"tcp"}],
             "logConfiguration":{
                 "logDriver":"awslogs",
@@ -19,6 +19,6 @@
             }
         }
     ],
-    "executionRoleArn":"arn:aws:iam::117088935427:role/ecsTaskExecutionRole"
+    "executionRoleArn":"arn:aws:iam::<aws_account_id>:role/ecsTaskExecutionRole"
 
 }
