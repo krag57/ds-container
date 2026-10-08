@@ -135,3 +135,11 @@ kubectl get service firstapp-api-service
 #Test it
 curl http://<EXTERNAL-IP>:8000/health
 
+##lets do a clean up
+delete -f deployment.yaml
+eksctl delete cluster --name firstapp-eks-cluster --region us-east-1
+
+aws ecs delete-service --cluster firstapp-cluster --service firstapp-api-task-service --force
+aws ecs delete-cluster  --cluster firstapp-cluster
+
+aws ec2 terminate-instances --instance-id <instanceID>
