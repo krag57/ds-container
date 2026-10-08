@@ -1,0 +1,145 @@
+## Docker setup
+
+#aws account id is in the .env
+
+docker build -t firstapp-api .  ##here firstapp-api is the name given
+docker build --progress=plain -t firstapp-api . --no-cache ## optional: to get the full build outputs without cache
+
+docker run -p 8000:8000 firstapp-api ## run the docker and expose to 8000 port as we described in the Dockerfile
+
+# (not part of the steps, but worth to keep it) view and stop the runnign containers
+docker ps
+docker stop <container id>
+#
+
+curl http://localhost:8000/health ## Check the health
+
+curl -X POST http://localhost:8000/output -H "Content-Type:application/json" -d '{"input":"ggghhhgghh"}' ##run the  output function in the app.py
+
+http://localhost:8000/docs ## we can run this to get the interactive UI
+
+## ECR setup and push Docker image
+aws ecr create-repository --repository-name firstapp-api --region us-east-1 ## ECR registration
+
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin <aws_account_id>.dkr.ecr.us-east-1.amazonaws.com  ##authenticate Docker to ECR
+
+docker tag firstapp-api:latest <aws_account_id>.dkr.ecr.us-east-1.amazonaws.com/firstapp-api ## Taging the local image for ECR
+
+
+docker images ## confirm images
+
+docker push <aws_account_id>.dkr.ecr.us-east-1.amazonaws.com/firstapp-api:latest ## push the image to the ecr
+
+aws ecr describe-images --repository-name firstapp-api --region us-east-1 ## confirm it landed in ECR
+
+
+## EC2 setup
+
+#create Ec2 with key pair and securtiy group rules with 
+#    1) Type: SSH Source: "My IP" <- for remotely login into the ec2
+#    2) Type: Custom TCP, port: 8000, source: "My IP" <- allow fastapi connection (8000 you defined in docker) allowing only internet from currnt IP not anywhere (not now)
+
+# also create a Iam role and attach to EC2 with policy AmazonEC2ContainerRegistryReadOnly; this will allow EC2 to pull(read) images from ECR
+
+#create SSH
+mkdir -p ~./ssh
+mv ~/Downloads/firstapp-api-ec2-key.pem ~/.ssh/
+chmod 400 ~/.ssh/firstapp-api-ec2-key.pem 
+
+ssh -i ~/.ssh/firstapp-api-ec2-key.pem ec2-user@<public ip address>
+
+#install docker on the instance
+sudo yum update -y
+sudo yum install docker -y
+sudo service docker start
+sudo usermod -a -G docker ec2-user
+
+#authenticate and pull the image from ECR to SSH session
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin <aws_account_id>.dkr.ecr.us-east-1.amazonaws.com
+docker pull <aws_account_id>.dkr.ecr.us-east-1.amazonaws.com/firstapp-api:latest
+
+#
+docker run -d -p 8000:8000 <aws_account_id>.dkr.ecr.us-east-1.amazonaws.com/firstapp-api:latest
+
+## we encounter an issue with the architecture difference
+# so, docker is build in mac, arm64 architecture but the EC2 is linux/amd64 architecture
+#we rebuild the docker for linux/amd64 or
+# switch EC2 to arm64 
+
+# we are going to rebuild the for amd64
+exit #first exit EC2
+
+docker buildx build --platform linux/amd64 -t firstapp-api:amd64 .
+docker tag firstapp-api:amd64 <aws_account_id>.dkr.ecr.us-east-1.amazonaws.com/firstapp-api:latest
+docker push <aws_account_id>.dkr.ecr.us-east-1.amazonaws.com/firstapp-api:latest
+
+ssh -i ~/.ssh/firstapp-api-ec2-key.pem ec2-user@<public ip>
+docker pull <aws_account_id>.dkr.ecr.us-east-1.amazonaws.com/firstapp-api
+docker run -d -p 8000:8000 <aws_account_id>.dkr.ecr.us-east-1.amazonaws.com/firstapp-api:latest
+
+#then in new terminal (locally)
+curl http://<pub ip>:8000/health
+#or in browser for the UI
+http://<pub ip>:8000/docs
+
+
+## Deployed to ECS fargate
+#create a cluster
+aws ecs create-cluster --cluster-name firstapp-cluster --region us-east-1
+
+#create a task execution role thrugh console
+# go to IAM console and create role and use case to be Elastic Container Service and then andd AmazonECSTaskExecutionPolicy and name it as ecsTaskExecutionRol. Then to makesure it works
+aws iam get-role --role-name ecsTaskExecutionRole
+
+#create a log group for container output. Since Fargate has no servers it is the way to get the apps output, error messages.....
+aws logs create-log-group --log-group-name /ecs/firstapp-api --region us-east-1
+
+#create a task definition. like here as json file; there replace to the correct aws account
+
+#register the task definition
+aws ecs register-task-definition --cli-input-json file://task-definition.json
+
+#then create a service thru console under created cluster.
+# chose capacity provider option and chose Fargate; then select the task, service name(chose a one) and then under networking
+# Type: Custom TCP, port: 8000, source: anywhere
+# once it provisoned. select the task and under networking get the public IP
+
+#Test it
+curl http://<task-public-ip>:8000/health
+
+
+##Now EKS
+brew install ecsctl
+brew install kubectl
+
+#confirm the installation
+eksctl version
+kubectl version
+
+#create eks cluster
+eksctl create cluster --name firstapp-eks-cluster --region us-east-1 --nodegroup-name standard-workers --node-type t3.small --nodes 2 -
+-nodes-min 1 --nodes-max 3
+
+#get status
+kubectl get nodes
+
+#create the deployment and service file; here it is in one file, then apply it
+kubectl apply -f deployment.yaml
+
+#watch the pods, created
+kubectl get pods
+
+# get the loadbalancer address
+kubectl get service firstapp-api-service
+
+#Test it
+curl http://<EXTERNAL-IP>:8000/health
+
+##lets do a clean up
+delete -f deployment.yaml
+eksctl delete cluster --name firstapp-eks-cluster --region us-east-1
+
+aws ecs delete-service --cluster firstapp-cluster --service firstapp-api-task-service --force
+aws ecs delete-cluster  --cluster firstapp-cluster
+
+aws ec2 terminate-instances --instance-id <instanceID>

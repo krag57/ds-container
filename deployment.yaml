@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: firstapp-api
+spec: 
+  replicas: 2
+  selector:
+    matchLabels:
+      app: firstapp-api
+  template:
+    metadata:
+      labels:
+        app: firstapp-api
+    spec:
+      containers:
+        - name: firstapp-api
+          image: <aws_account_id>.dkr.ecr.us-east-1.amazonaws.com/firstapp-api:latest #change it to right account
+          ports:
+            - containerPort: 8000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: firstapp-api-service
+spec:
+  type: LoadBalancer
+  selector:
+    app: firstapp-api
+  ports:
+    - port: 80
+      targetPort: 8000

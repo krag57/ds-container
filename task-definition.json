@@ -1,0 +1,24 @@
+{
+    "family":"firstapp-api-task",
+    "networkMode": "awsvpc",
+    "requiresCompatibilities":["FARGATE"],
+    "cpu":"256",
+    "memory":"512",
+    "containerDefinitions":[
+        {
+            "name":"firstapp-api",
+            "image":"<aws_account_id>.dkr.ecr.us-east-1.amazonaws.com/firstapp-api:latest",
+            "portMappings": [{"containerPort":8000,"protocol":"tcp"}],
+            "logConfiguration":{
+                "logDriver":"awslogs",
+                "options":{
+                    "awslogs-group":"/ecs/firstapp-api",
+                    "awslogs-region":"us-east-1",
+                    "awslogs-stream-prefix":"ecs"
+                }
+            }
+        }
+    ],
+    "executionRoleArn":"arn:aws:iam::<aws_account_id>:role/ecsTaskExecutionRole"
+
+}
