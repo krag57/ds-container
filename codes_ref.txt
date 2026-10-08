@@ -81,3 +81,29 @@ docker run -d -p 8000:8000 <aws_account_id>.dkr.ecr.us-east-1.amazonaws.com/firs
 curl http://<pub ip>:8000/health
 #or in browser for the UI
 http://<pub ip>:8000/docs
+
+
+## Deployed to ECS fargate
+#create a cluster
+aws ecs create-cluster --cluster-name firstapp-cluster --region us-east-1
+
+#create a task execution role thrugh console
+# go to IAM console and create role and use case to be Elastic Container Service and then andd AmazonECSTaskExecutionPolicy and name it as ecsTaskExecutionRol. Then to makesure it works
+aws iam get-role --role-name ecsTaskExecutionRole
+
+#create a log group for container output. Since Fargate has no servers it is the way to get the apps output, error messages.....
+aws logs create-log-group --log-group-name /ecs/firstapp-api --region us-east-1
+
+#create a task definition. like here as json file
+
+#register the task definition
+aws ecs register-task-definition --cli-input-json file://task-definition.json
+
+#then create a service thru console under created cluster.
+# chose capacity provider option and chose Fargate; then select the task, service name(chose a one) and then under networking
+# Type: Custom TCP, port: 8000, source: anywhere
+# once it provisoned. select the task and under networking get the public IP
+
+#Test it
+curl http://<task-public-ip>:8000/health
+
